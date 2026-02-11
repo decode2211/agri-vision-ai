@@ -1,5 +1,6 @@
 import streamlit as st
-from backend.api import get_past_report, predict_future
+from backend.api import get_past_report, predict_future, df
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Agri Vision AI", layout="centered")
 
@@ -8,12 +9,10 @@ st.title("🌾 District Rice Yield Intelligence System")
 mode = st.radio("Select Mode:", ["Study Past", "Predict Future"])
 
 district = st.text_input("Enter District Name:")
-import pandas as pd
-import matplotlib.pyplot as plt
 
-from backend.api import get_past_report
-from backend.api import df  # use backend dataframe directly
-
+# ==========================================
+# STUDY PAST MODE
+# ==========================================
 
 if mode == "Study Past":
 
@@ -29,37 +28,24 @@ if mode == "Study Past":
             st.subheader("📊 District Summary")
 
             col1, col2, col3 = st.columns(3)
-
             col1.metric("Yield (t/ha)", result["actual_yield"])
             col2.metric("Rainfall (mm)", result["rainfall"])
             col3.metric("Max Temp (°C)", result["max_temperature"])
 
             district_data = df[df["district"] == district.lower()].copy()
 
-            # ==============================
             # 1️⃣ Yield Trend
-            # ==============================
             st.subheader("📈 Yield Trend Over Time")
 
             fig, ax = plt.subplots()
             ax.plot(district_data["year"], district_data["yield"])
-            ax.axvline(year, linestyle="--")  # highlight selected year
+            ax.axvline(year, linestyle="--")
             ax.set_xlabel("Year")
             ax.set_ylabel("Yield (t/ha)")
             ax.set_title("Yield Trend")
             st.pyplot(fig)
 
-            st.markdown("""
-**How to interpret this graph:**
-- The line shows how rice yield has changed over the years.
-- An upward trend indicates productivity improvement.
-- A sudden drop may indicate drought, extreme weather, or stress conditions.
-- The vertical dashed line marks the selected year.
-""")
-
-            # ==============================
             # 2️⃣ Rainfall vs Yield
-            # ==============================
             st.subheader("🌧 Rainfall vs Yield Relationship")
 
             fig2, ax2 = plt.subplots()
@@ -69,17 +55,7 @@ if mode == "Study Past":
             ax2.set_title("Rainfall Impact on Yield")
             st.pyplot(fig2)
 
-            st.markdown("""
-**How to interpret this graph:**
-- Each dot represents one year.
-- If dots slope upward → higher rainfall increases yield.
-- If scattered randomly → rainfall may not strongly influence yield.
-- Extreme low rainfall points may correspond to lower yields (drought years).
-""")
-
-            # ==============================
             # 3️⃣ Temperature vs Yield
-            # ==============================
             st.subheader("🌡 Temperature vs Yield Relationship")
 
             fig3, ax3 = plt.subplots()
@@ -89,17 +65,38 @@ if mode == "Study Past":
             ax3.set_title("Temperature Impact on Yield")
             st.pyplot(fig3)
 
-            st.markdown("""
-**How to interpret this graph:**
-- If yield decreases as temperature increases → heat stress is affecting crops.
-- A downward slope suggests negative heat impact.
-- If stable → crop may be heat-resilient.
-""")
+# ==========================================
+# PREDICT FUTURE MODE
+# ==========================================
+
 elif mode == "Predict Future":
+
     year = st.number_input("Prediction Year", min_value=2024, max_value=2035, step=1)
-    rainfall = st.number_input("Expected Rainfall (mm)")
-    max_temp = st.number_input("Expected Max Temperature (°C)")
-    
+    rainfall = st.number_input("Expected Rainfall (mm)", min_value=0.0)
+    max_temp = st.number_input("Expected Max Temperature (°C)", min_value=0.0)
+
     if st.button("Predict Yield"):
+
         result = predict_future(district, year, rainfall, max_temp)
-        st.json(result)
+
+        if "error" in result:
+            st.error(result["error"])
+        else:
+            st.subheader("📊 Prediction Breakdown")
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Structural Yield", result["structural_yield"])
+            col2.metric("Climate Adjustment", result["climate_adjustment"])
+            col3.metric("Final Yield (t/ha)", result["final_predicted_yield"])
+            adj = result["climate_adjustment"]
+
+            if adj < -0.25:
+             st.error("🚨 Severe climate stress")
+            elif adj < -0.1:
+             st.warning("⚠ Moderate climate stress")
+            elif adj < -0.03:
+             st.info("ℹ Mild climate variation")
+            elif adj <= 0.03:
+             st.success("✅ Near-normal climate conditions")
+            else:
+             st.success("🌧 Favorable climate boost")
